@@ -1,27 +1,27 @@
 using UnityEngine;
-using UnityEngine.Monetization;
 using UnityEngine.Advertisements;
 using System.Collections;
 
 
-public class AdManager : MonoBehaviour {
+public class UnityAdsManager : MonoBehaviour, IUnityAdsListener
+{
 
     public string appId;
     public string bannerId;
     public string interstitialId;
     public string rewardedVideoId;
     public bool testMode;
-    
+
     public bool IsRewardedVideoReady { get; set; }
     public bool statusAds = true;
 
     private int countInterstitial;
 
-    public static AdManager Instance;
+    public static UnityAdsManager Instance;
 
     private void Awake()
     {
-        if (Instance!=null)
+        if (Instance != null)
             Destroy(gameObject);
         else
             Instance = this;
@@ -31,14 +31,13 @@ public class AdManager : MonoBehaviour {
 
     private void Start()
     {
-        Monetization.Initialize(appId, testMode);
         Advertisement.Initialize(appId, testMode);
-
+        Advertisement.AddListener(this);
     }
 
     IEnumerator WaitForAd()
     {
-        while (!Monetization.IsReady(appId))
+        while (!Advertisement.IsReady(appId))
         {
             yield return null;
         }
@@ -54,25 +53,15 @@ public class AdManager : MonoBehaviour {
 
     public void RequestInterstitial()
     {
-        if (Monetization.IsReady(interstitialId))
+        if (Advertisement.IsReady(interstitialId))
         {
-            ShowAdPlacementContent ad = null;
-            ad = Monetization.GetPlacementContent(interstitialId) as ShowAdPlacementContent;
-
-            if (ad != null)
-            {
-                if(statusAds)
-                {
-                    ad.Show();
-                }
-                
-            }
+            Advertisement.Show(interstitialId);
         }
     }
 
     public void RequestRewardBasedVideo()
     {
-        if (Monetization.IsReady(rewardedVideoId))
+        if (Advertisement.IsReady(rewardedVideoId))
         {
             IsRewardedVideoReady = true;
         }
@@ -89,10 +78,11 @@ public class AdManager : MonoBehaviour {
 
     public void ShowRewardBasedAd()
     {
-        ShowAdCallbacks options = new ShowAdCallbacks();
-        options.finishCallback = HandleShowResult;
-        ShowAdPlacementContent ad = Monetization.GetPlacementContent(rewardedVideoId) as ShowAdPlacementContent;
-        ad.Show(options);
+        if (statusAds)
+        {
+            Advertisement.Show(rewardedVideoId);
+        }
+
     }
 
 
@@ -102,7 +92,7 @@ public class AdManager : MonoBehaviour {
         {
             StartCoroutine(ShowBannerWhenReady());
         }
-       
+
     }
 
     public void DestroyBanner()
@@ -115,25 +105,50 @@ public class AdManager : MonoBehaviour {
         Advertisement.Banner.Hide();
     }
 
-    void HandleShowResult(UnityEngine.Monetization.ShowResult result)
+    public void OnUnityAdsDidFinish(string placementId, ShowResult showResult)
     {
-        if (result == UnityEngine.Monetization.ShowResult.Finished)
+        // Define conditional logic for each ad completion status:
+        if (showResult == ShowResult.Finished)
         {
-            // Give Reward
+            // Reward the user for watching the ad to completion.
             IsRewardedVideoReady = false;
             RequestRewardBasedVideo();
         }
-
-        else if (result == UnityEngine.Monetization.ShowResult.Skipped)
+        else if (showResult == ShowResult.Skipped)
         {
-            // Ads is skipped dont give reward
+            // Do not reward the user for skipping the ad.
             IsRewardedVideoReady = false;
             this.RequestRewardBasedVideo();
         }
-        else if (result == UnityEngine.Monetization.ShowResult.Failed)
+        else if (showResult == ShowResult.Failed)
         {
-            Debug.LogError("Video failed to show");
+            Debug.LogWarning("The ad did not finish due to an error.");
         }
+    }
+
+    public void OnUnityAdsReady(string placementId)
+    {
+        // If the ready Placement is rewarded, show the ad:
+        if (placementId == rewardedVideoId)
+        {
+            // Optional actions to take when the placement becomes ready(For example, enable the rewarded ads button)
+        }
+    }
+
+    public void OnUnityAdsDidError(string message)
+    {
+        // Log the error.
+    }
+
+    public void OnUnityAdsDidStart(string placementId)
+    {
+        // Optional actions to take when the end-users triggers an ad.
+    }
+
+    // When the object that subscribes to ad events is destroyed, remove the listener:
+    public void OnDestroy()
+    {
+        Advertisement.RemoveListener(this);
     }
 
 }
